@@ -192,7 +192,7 @@ def draw_bounding_boxes(image: Image.Image, boxes: Sequence[BoundingBox]) -> Ima
     draw = ImageDraw.Draw(annotated)
 
     for box in boxes:
-        draw.rectangle(box.to_tuple(), outline="red", width=2)
+        draw.rectangle(box.to_tuple(), outline="green", width=2)
 
     return annotated
 
