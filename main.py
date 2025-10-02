@@ -4,10 +4,48 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple, cast
+
+from PIL import Image, ImageDraw
+
+
+def _ensure_vgg_model_urls() -> None:
+    """Backfill ``torchvision``'s removed ``model_urls`` attribute.
+
+    Newer releases of ``torchvision`` no longer expose the ``model_urls``
+    dictionary that older versions of :mod:`craft_text_detector` expect when
+    importing ``torchvision.models.vgg``.  The library only needs a handful of
+    VGG weight URLs, so when the attribute is missing we recreate it to keep the
+    third-party dependency working without requiring users to downgrade
+    ``torchvision``.
+    """
+
+    try:
+        import torchvision.models.vgg as vgg_module  # type: ignore
+    except Exception:  # pragma: no cover - torchvision might be unavailable.
+        return
+
+    if hasattr(vgg_module, "model_urls"):
+        return
+
+    vgg_module.model_urls = cast(  # type: ignore[attr-defined]
+        Dict[str, str],
+        {
+            "vgg11": "https://download.pytorch.org/models/vgg11-bbd30ac9.pth",
+            "vgg13": "https://download.pytorch.org/models/vgg13-c768596a.pth",
+            "vgg16": "https://download.pytorch.org/models/vgg16-397923af.pth",
+            "vgg19": "https://download.pytorch.org/models/vgg19-dcbb9e9d.pth",
+            "vgg11_bn": "https://download.pytorch.org/models/vgg11_bn-6002323d.pth",
+            "vgg13_bn": "https://download.pytorch.org/models/vgg13_bn-abd245e5.pth",
+            "vgg16_bn": "https://download.pytorch.org/models/vgg16_bn-6c64b313.pth",
+            "vgg19_bn": "https://download.pytorch.org/models/vgg19_bn-c79401a0.pth",
+        },
+    )
+
+
+_ensure_vgg_model_urls()
 
 from craft_text_detector import Craft
-from PIL import Image, ImageDraw
 
 
 @dataclass
