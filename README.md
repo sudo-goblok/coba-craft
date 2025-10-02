@@ -1,0 +1,1 @@
+coba craft dan ocr
