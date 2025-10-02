@@ -169,9 +169,14 @@ def run_craft(image_path: Path) -> List[BoundingBox]:
     try:
         print("    Menjalankan deteksi teks dengan CRAFT...")
         prediction_result = craft.detect_text(str(image_path))
-        raw_boxes = prediction_result.get("boxes") or []
+        raw_boxes = prediction_result.get("boxes")
+        if raw_boxes is None:
+            iterable_boxes: Iterable[Sequence[Sequence[float]]] = []
+        else:
+            iterable_boxes = cast(Iterable[Sequence[Sequence[float]]], raw_boxes)
+
         boxes = []
-        for box in raw_boxes:
+        for box in iterable_boxes:
             try:
                 boxes.append(BoundingBox.from_points(box))
             except (TypeError, ValueError):
