@@ -4,7 +4,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Tuple, cast
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -70,11 +70,11 @@ def _patch_craft_adjust_result_coordinates() -> None:
         polys: Iterable[Iterable[Sequence[float]]],
         ratio_w: float,
         ratio_h: float,
-    ) -> List[List[List[float]]]:
+    ) -> List[np.ndarray]:
         try:
             return original_adjust(polys, ratio_w, ratio_h)
         except ValueError:
-            sanitized: List[List[List[float]]] = []
+            sanitized: List[np.ndarray] = []
             if polys is None:  # type: ignore[redundant-expr]
                 return sanitized
             for poly in polys:
@@ -86,7 +86,7 @@ def _patch_craft_adjust_result_coordinates() -> None:
                     continue
                 arr[:, 0] *= ratio_w
                 arr[:, 1] *= ratio_h
-                sanitized.append(arr.tolist())
+                sanitized.append(arr)
             return sanitized
 
     craft_utils.adjustResultCoordinates = safe_adjust  # type: ignore[attr-defined]
@@ -120,7 +120,16 @@ class BoundingBox:
         return (self.left, self.top, self.right, self.bottom)
 
 
-def prompt_image_path() -> Path:
+def prompt_image_path(default_path: Optional[Path] = None) -> Path:
+    if default_path is not None:
+        if default_path.is_file():
+            print(f"    Menggunakan path gambar dari argumen: {default_path}")
+            return default_path
+        print(
+            f"Path dari argumen tidak ditemukan: {default_path}. "
+            "Meminta input manual.\n"
+        )
+
     while True:
         try:
             user_input = input("Masukkan path gambar yang ingin diproses: ").strip().strip('"')
@@ -189,7 +198,10 @@ def main() -> None:
     print("============================\n")
 
     print("[1/5] Meminta input gambar dari pengguna...")
-    image_path = prompt_image_path()
+    cli_path: Optional[Path] = None
+    if len(sys.argv) >= 2:
+        cli_path = Path(sys.argv[1]).expanduser().resolve()
+    image_path = prompt_image_path(cli_path)
     output_path = build_output_path(image_path)
 
     print(f"[2/5] Memuat gambar dari {image_path}...")
