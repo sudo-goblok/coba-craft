@@ -5,7 +5,7 @@ Aplikasi konsol interaktif berbasis Python untuk mendeteksi teks pada gambar men
 ## Persiapan
 
 1. Buat virtual environment (opsional tetapi disarankan).
-2. Instal dependensi:
+2. Instal dependensi (paket `craft-text-detector` terakhir yang tersedia di PyPI saat ini adalah versi 0.4.3 sehingga requirement sudah disesuaikan):
 
    ```bash
    pip install -r requirements.txt
