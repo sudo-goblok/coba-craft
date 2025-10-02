@@ -4,8 +4,9 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple, cast
+from typing import Dict, Iterable, List, Sequence, Tuple, cast
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 
@@ -45,6 +46,54 @@ def _ensure_vgg_model_urls() -> None:
 
 _ensure_vgg_model_urls()
 
+
+def _patch_craft_adjust_result_coordinates() -> None:
+    """Harden ``craft_text_detector`` against irregular polygons.
+
+    Some real-world images trigger a bug inside
+    :mod:`craft_text_detector` where a handful of detected polygons have a
+    different number of points than the rest.  The library attempts to
+    coerce all polygons into a single :class:`numpy.ndarray`, which raises
+    ``ValueError`` for these ragged inputs.  By monkey patching the helper
+    used to rescale polygon coordinates we can gracefully skip malformed
+    entries and keep the rest of the detections.
+    """
+
+    try:
+        from craft_text_detector import craft_utils  # type: ignore
+    except Exception:  # pragma: no cover - dependency might be missing.
+        return
+
+    original_adjust = craft_utils.adjustResultCoordinates
+
+    def safe_adjust(
+        polys: Iterable[Iterable[Sequence[float]]],
+        ratio_w: float,
+        ratio_h: float,
+    ) -> List[List[List[float]]]:
+        try:
+            return original_adjust(polys, ratio_w, ratio_h)
+        except ValueError:
+            sanitized: List[List[List[float]]] = []
+            if polys is None:  # type: ignore[redundant-expr]
+                return sanitized
+            for poly in polys:
+                try:
+                    arr = np.asarray(poly, dtype=float)
+                except Exception:  # pragma: no cover - defensive.
+                    continue
+                if arr.ndim != 2 or arr.shape[1] != 2:
+                    continue
+                arr[:, 0] *= ratio_w
+                arr[:, 1] *= ratio_h
+                sanitized.append(arr.tolist())
+            return sanitized
+
+    craft_utils.adjustResultCoordinates = safe_adjust  # type: ignore[attr-defined]
+
+
+_patch_craft_adjust_result_coordinates()
+
 from craft_text_detector import Craft
 
 
@@ -58,9 +107,13 @@ class BoundingBox:
     bottom: float
 
     @classmethod
-    def from_quadrilateral(cls, quad: Sequence[Sequence[float]]) -> "BoundingBox":
-        xs = [point[0] for point in quad]
-        ys = [point[1] for point in quad]
+    def from_points(cls, points: Sequence[Sequence[float]]) -> "BoundingBox":
+        sanitized = [point for point in points if len(point) >= 2]
+        if not sanitized:
+            raise ValueError("Tidak ada titik untuk membentuk bounding box.")
+
+        xs = [point[0] for point in sanitized]
+        ys = [point[1] for point in sanitized]
         return cls(min(xs), min(ys), max(xs), max(ys))
 
     def to_tuple(self) -> Tuple[float, float, float, float]:
@@ -108,7 +161,12 @@ def run_craft(image_path: Path) -> List[BoundingBox]:
         print("    Menjalankan deteksi teks dengan CRAFT...")
         prediction_result = craft.detect_text(str(image_path))
         raw_boxes = prediction_result.get("boxes") or []
-        boxes = [BoundingBox.from_quadrilateral(box) for box in raw_boxes]
+        boxes = []
+        for box in raw_boxes:
+            try:
+                boxes.append(BoundingBox.from_points(box))
+            except (TypeError, ValueError):
+                continue
         return boxes
     finally:
         craft.unload_craftnet_model()
